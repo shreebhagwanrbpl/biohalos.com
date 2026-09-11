@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion } from "framer-motion";
 import {
@@ -18,13 +18,11 @@ import {
   PhoneCall,
   Mail,
   Wrench,
-  Activity,
   Award,
   Clock,
-  HeartPulse,
   Sparkles,
-  ChevronRight,
   Zap,
+  Loader2,
 } from "lucide-react";
 
 import SectionTitle from "@/components/SectionTitle";
@@ -32,8 +30,6 @@ import ServiceCard from "@/components/ServiceCard";
 import ProductCard from "@/components/ProductCard";
 import ContactForm from "@/components/ContactForm";
 import HeroCarousel from "@/components/HeroCarousel";
-import { fallbackProducts } from "@/data/productsData";
-import { fallbackServices } from "@/data/servicesData";
 import { fetchAllDynamicProducts } from "@/lib/fetchProducts";
 
 const stats = [
@@ -115,17 +111,16 @@ const testimonials = [
 ];
 
 export default function Home({ city }) {
-  const [services, setServices] = useState(fallbackServices);
-  const [products, setProducts] = useState(fallbackProducts);
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [services, setServices] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [homeData, setHomeData] = useState(null);
   const [contactInfo, setContactInfo] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   const pathname = usePathname();
   const pathParts = pathname.split("/").filter(Boolean);
 
-  const staticRoutes = ["about", "services", "items", "contact"];
+  const staticRoutes = ["about", "services", "items", "contact", "products"];
   const district =
     pathParts.length > 0 && !staticRoutes.includes(pathParts[0])
       ? pathParts[0]
@@ -142,10 +137,10 @@ export default function Home({ city }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch home page configuration (title, description, buttons, carousel media)
+        // Fetch home page configuration
         try {
           const homeSnap = await getDoc(
-            doc(db, "websites", "clinidixcom", "pages", "home")
+            doc(db, "websites", "biohaloscom", "pages", "home")
           );
           if (homeSnap.exists()) {
             setHomeData(homeSnap.data());
@@ -154,10 +149,10 @@ export default function Home({ city }) {
           console.error("Error fetching home data:", homeErr);
         }
 
-        // Fetch contact information for dynamic helpline info
+        // Fetch contact information
         try {
           const contactSnap = await getDoc(
-            doc(db, "websites", "clinidixcom", "pages", "contact")
+            doc(db, "websites", "biohaloscom", "pages", "contact")
           );
           if (contactSnap.exists()) {
             setContactInfo(contactSnap.data().contactInfo || []);
@@ -166,40 +161,35 @@ export default function Home({ city }) {
           console.error("Error fetching contact data:", contactErr);
         }
 
-        // Fetch services from Firebase if available
-        const serviceSnap = await getDoc(
-          doc(db, "websites", "clinidixcom", "pages", "services")
-        );
-        if (serviceSnap.exists() && serviceSnap.data().services?.length > 0) {
-          const dbServices = serviceSnap.data().services.map((s, idx) => ({
-            ...fallbackServices[idx % fallbackServices.length],
-            title: s.title || fallbackServices[idx % fallbackServices.length].title,
-            desc: s.desc || fallbackServices[idx % fallbackServices.length].desc,
-          }));
-          setServices(dbServices);
+        // Fetch services from Firebase
+        try {
+          const serviceSnap = await getDoc(
+            doc(db, "websites", "biohaloscom", "pages", "services")
+          );
+          if (serviceSnap.exists() && serviceSnap.data().services?.length > 0) {
+            setServices(serviceSnap.data().services);
+          }
+        } catch (sErr) {
+          console.error("Error fetching services:", sErr);
         }
 
-        // Fetch products dynamically from Firestore
+        // Fetch products dynamically from Firestore - NO static fallback flash
         const fetchedProducts = await fetchAllDynamicProducts();
         if (fetchedProducts && fetchedProducts.length > 0) {
           setProducts(fetchedProducts);
         }
       } catch (err) {
-        console.error("Using fallback data:", err);
+        console.error("Error loading homepage data:", err);
       } finally {
-        setLoading(false);
+        setLoadingProducts(false);
       }
     };
 
     fetchData();
   }, []);
 
-  const categories = ["All", ...Array.from(new Set(products.map((p) => p.category)))];
-
-  const filteredProducts =
-    activeCategory === "All"
-      ? products.slice(0, 6)
-      : products.filter((p) => p.category === activeCategory).slice(0, 6);
+  // Show strictly 3 products on Home page
+  const featuredProducts = products.slice(0, 3);
 
   const serviceIcons = [
     <Microscope size={28} key={1} />,
@@ -237,8 +227,8 @@ export default function Home({ city }) {
   })();
 
   return (
-    <div className="bg-[#FFF9EF]/40 text-[#38240D]">
-      {/* ================= DYNAMIC HERO BANNER & CAROUSEL ================= */}
+    <div className="bg-slate-50 text-slate-900">
+      {/* ================= DYNAMIC HERO BANNER & CAROUSEL (EDITORIAL STYLE) ================= */}
       <HeroCarousel
         homeData={homeData}
         locationTitle={locationTitle}
@@ -246,22 +236,22 @@ export default function Home({ city }) {
       />
 
       {/* ================= STATS TICKER ================= */}
-      <section className="bg-gradient-to-r from-[#38240D] via-[#5B4634] to-[#38240D] py-10 text-white shadow-inner">
+      <section className="bg-slate-900 py-10 text-white shadow-inner">
         <div className="container-custom">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {stats.map((item, idx) => {
               const Icon = item.icon;
               return (
                 <div key={idx} className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#C05800]/25 text-[#E4C5A2] border border-[#C05800]/40">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-slate-200 border border-slate-700">
                     <Icon size={26} />
                   </div>
                   <div>
                     <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                       {item.number}
                     </h3>
-                    <p className="text-xs sm:text-sm font-bold text-[#E4C5A2]">{item.title}</p>
-                    <p className="text-[11px] text-[#E8D3BC]/80 hidden sm:block">{item.desc}</p>
+                    <p className="text-xs sm:text-sm font-bold text-slate-300">{item.title}</p>
+                    <p className="text-[11px] text-slate-400 hidden sm:block">{item.desc}</p>
                   </div>
                 </div>
               );
@@ -271,12 +261,12 @@ export default function Home({ city }) {
       </section>
 
       {/* ================= PILLARS / WHY CHOOSE US ================= */}
-      <section className="section-padding bg-gradient-to-b from-white via-[#FFF9EF] to-[#FDFBD4]">
+      <section className="section-padding bg-white">
         <div className="container-custom">
           <SectionTitle
             badge="Why Modern Labs Choose Us"
             title="Serious Tools for Serious Diagnostics"
-            description="Minimal monochrome foundations with sharp technical accents for specialists."
+            description="Minimal monochrome foundations with sharp technical accents for healthcare specialists."
             center
           />
 
@@ -286,27 +276,27 @@ export default function Home({ city }) {
               return (
                 <div
                   key={index}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-[#E8D3BC] bg-white p-8 shadow-md transition-all duration-300 hover:-translate-y-2 hover:border-[#C05800]/50 hover:shadow-2xl hover:shadow-[#C05800]/15"
+                  className="group relative flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-slate-400 hover:shadow-xl"
                 >
                   <div>
-                    <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F3E4D2] text-[#C05800] transition-all duration-300 group-hover:bg-[#C05800] group-hover:text-white group-hover:scale-110 shadow-sm">
+                    <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-900 transition-all duration-300 group-hover:bg-slate-900 group-hover:text-white group-hover:scale-105 shadow-xs">
                       <Icon size={28} />
                     </div>
 
-                    <span className="mb-3 inline-block rounded-full bg-[#FFF9EF] border border-[#E8D3BC] px-3 py-1 text-xs font-bold text-[#713600]">
+                    <span className="mb-3 inline-block rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-xs font-bold text-slate-800">
                       {pillar.badge}
                     </span>
 
-                    <h3 className="mb-3 text-xl font-bold text-[#38240D] group-hover:text-[#C05800] transition-colors">
+                    <h3 className="mb-3 text-xl font-bold text-slate-900 group-hover:text-slate-700 transition-colors">
                       {pillar.title}
                     </h3>
 
-                    <p className="text-sm leading-relaxed text-[#5B4634]">
+                    <p className="text-sm leading-relaxed text-slate-600">
                       {pillar.desc}
                     </p>
                   </div>
 
-                  <div className="mt-8 pt-4 border-t border-[#E8D3BC]/40 flex items-center gap-2 text-xs font-bold text-[#C05800]">
+                  <div className="mt-8 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-bold text-slate-900">
                     <span>Learn standard</span>
                     <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
                   </div>
@@ -317,112 +307,121 @@ export default function Home({ city }) {
         </div>
       </section>
 
-      {/* ================= FEATURED PRODUCTS SHOWCASE ================= */}
-      <section className="section-padding bg-white border-y border-[#E8D3BC]/50">
+      {/* ================= FEATURED PRODUCTS SHOWCASE (EXACTLY 3 PRODUCTS, NO CATEGORY TABS) ================= */}
+      <section className="section-padding bg-slate-50 border-y border-slate-200">
         <div className="container-custom">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <SectionTitle
               badge="Diagnostic Inventory"
-              title="Equipment Worth Exploring"
-              description="Explore our curated catalog of automated clinical analyzers, PCR units, ICU patient monitors, and laboratory centrifuges."
+              title="Featured Laboratory Instruments"
+              description="Explore precision automated clinical analyzers, PCR systems, and diagnostic monitors with guaranteed calibration accuracy."
             />
 
             <Link
               href={makeLink("/items")}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#FFF9EF] border border-[#E8D3BC] px-6 py-3.5 text-sm font-bold text-[#C05800] shadow-sm transition-all hover:bg-[#C05800] hover:text-white hover:border-[#C05800] shrink-0"
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-bold !text-white shadow-sm transition-all hover:bg-slate-800 hover:shadow-md shrink-0"
             >
-              <span>View All Products</span>
-              <ArrowRight size={16} />
+              <span className="!text-white text-white font-bold">View All Products</span>
+              <ArrowRight size={16} className="!text-white text-white stroke-[2.5]" />
             </Link>
           </div>
 
-          {/* Category Tabs */}
-          <div className="mt-10 flex flex-wrap items-center gap-3 border-b border-[#E8D3BC]/60 pb-4">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`rounded-xl px-5 py-2.5 text-xs sm:text-sm font-bold transition-all ${activeCategory === cat
-                  ? "bg-[#C05800] text-white shadow-md shadow-[#C05800]/20"
-                  : "bg-[#FFF9EF] border border-[#E8D3BC] text-[#5B4634] hover:bg-[#F3E4D2]"
-                  }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Product Grid */}
-          <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {filteredProducts.map((prod) => (
-              <ProductCard key={prod.id} product={prod} makeLink={makeLink} />
-            ))}
-          </div>
+          {/* Product Grid - Exactly 3 Products */}
+          {loadingProducts ? (
+            <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="flex flex-col justify-between overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm animate-pulse h-[460px]"
+                >
+                  <div className="h-52 w-full rounded-2xl bg-slate-100 mb-6" />
+                  <div className="space-y-3">
+                    <div className="h-4 w-1/3 bg-slate-200 rounded" />
+                    <div className="h-6 w-3/4 bg-slate-200 rounded" />
+                    <div className="h-4 w-full bg-slate-100 rounded" />
+                  </div>
+                  <div className="h-12 w-full bg-slate-200 rounded-2xl mt-6" />
+                </div>
+              ))}
+            </div>
+          ) : featuredProducts.length > 0 ? (
+            <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {featuredProducts.map((prod) => (
+                <ProductCard key={prod.id || prod.slug} product={prod} makeLink={makeLink} />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-12 text-center rounded-3xl border border-slate-200 bg-white p-12">
+              <p className="text-base font-bold text-slate-700">Catalog is updating...</p>
+            </div>
+          )}
         </div>
       </section>
 
       {/* ================= SERVICES MATRIX ================= */}
-      <section className="section-padding bg-gradient-to-b from-[#FDFBD4] via-white to-[#FFF9EF]">
-        <div className="container-custom">
-          <SectionTitle
-            badge="Healthcare Solutions"
-            title="Support Built Around Your Workflow"
-            description="From NABL-certified calibration to 2-hour emergency repair response, our certified engineers support your clinical operations round the clock."
-            center
-          />
+      {services.length > 0 && (
+        <section className="section-padding bg-white">
+          <div className="container-custom">
+            <SectionTitle
+              badge="Healthcare Solutions"
+              title="Support Built Around Your Workflow"
+              description="From NABL-certified calibration to 2-hour emergency repair response, our certified engineers support your clinical operations round the clock."
+              center
+            />
 
-          <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {services.map((srv, idx) => (
-              <ServiceCard
-                key={srv.id || idx}
-                icon={serviceIcons[idx % serviceIcons.length]}
-                title={srv.title}
-                description={srv.desc}
-                badge={srv.badge}
-                turnaround={srv.turnaround}
-                highlights={srv.highlights}
-                makeLink={makeLink}
-              />
-            ))}
+            <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {services.map((srv, idx) => (
+                <ServiceCard
+                  key={srv.id || idx}
+                  icon={serviceIcons[idx % serviceIcons.length]}
+                  title={srv.title}
+                  description={srv.desc}
+                  badge={srv.badge}
+                  turnaround={srv.turnaround}
+                  highlights={srv.highlights}
+                  makeLink={makeLink}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ================= ISO & QUALITY CERTIFICATION BANNER ================= */}
-      <section className="section-padding bg-[#38240D] text-white relative overflow-hidden">
-        <div className="pointer-events-none absolute -right-20 -bottom-20 h-96 w-96 rounded-full bg-[#C05800]/20 blur-3xl" />
+      <section className="section-padding bg-slate-900 text-white relative overflow-hidden">
+        <div className="pointer-events-none absolute -right-20 -bottom-20 h-96 w-96 rounded-full bg-slate-800/60 blur-3xl" />
         <div className="container-custom relative z-10">
           <div className="grid lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-7">
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#C05800]/30 border border-[#C05800]/50 px-4 py-1.5 text-xs font-bold text-[#E4C5A2] uppercase tracking-wider">
-                <Award size={16} /> Quality Assurance & Compliance
+              <span className="inline-flex items-center gap-2 rounded-full bg-slate-800 border border-slate-700 px-4 py-1.5 text-xs font-bold text-slate-200 uppercase tracking-wider">
+                <Award size={16} className="text-emerald-400" /> Quality Assurance & Compliance
               </span>
 
               <h2 className="mt-6 text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight">
                 Uncompromised Clinical Accuracy & Regulatory Standards
               </h2>
 
-              <p className="mt-4 text-base sm:text-lg text-[#E8D3BC]/90 leading-relaxed">
-                Raj Biosisstrictly adheres to international quality protocols. Every equipment installation comes with complete IQ/OQ/PQ validation documentation and certified calibration reports.
+              <p className="mt-4 text-base sm:text-lg text-slate-300 leading-relaxed">
+                Raj Biosis strictly adheres to international quality protocols. Every equipment installation comes with complete IQ/OQ/PQ validation documentation and certified calibration reports.
               </p>
 
               <div className="mt-8 grid sm:grid-cols-2 gap-4">
-                <div className="rounded-2xl border border-[#E8D3BC]/20 bg-white/5 p-5 backdrop-blur-sm">
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/60 p-5 backdrop-blur-sm">
                   <h4 className="text-lg font-bold text-white flex items-center gap-2">
-                    <ShieldCheck size={20} className="text-[#C05800]" />
+                    <ShieldCheck size={20} className="text-emerald-400" />
                     ISO 13485 & CE Compliance
                   </h4>
-                  <p className="mt-2 text-xs text-[#E8D3BC]/80">
+                  <p className="mt-2 text-xs text-slate-300">
                     Certified medical device quality management system for diagnostic analyzers.
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-[#E8D3BC]/20 bg-white/5 p-5 backdrop-blur-sm">
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/60 p-5 backdrop-blur-sm">
                   <h4 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Clock size={20} className="text-[#C05800]" />
+                    <Clock size={20} className="text-emerald-400" />
                     2-Hour SLA Maintenance
                   </h4>
-                  <p className="mt-2 text-xs text-[#E8D3BC]/80">
+                  <p className="mt-2 text-xs text-slate-300">
                     Dedicated engineer dispatch team ready for emergency hospital repairs.
                   </p>
                 </div>
@@ -430,27 +429,27 @@ export default function Home({ city }) {
             </div>
 
             <div className="lg:col-span-5">
-              <div className="rounded-3xl border border-[#E8D3BC]/30 bg-gradient-to-br from-white/10 to-white/5 p-8 backdrop-blur-md text-center">
-                <div className="mx-auto flex h-24 w-24 sm:h-28 sm:w-28 flex-col items-center justify-center rounded-full bg-gradient-to-br from-[#E06D00] via-[#C05800] to-[#8C3E00] text-white shadow-2xl shadow-[#C05800]/50 border-2 border-amber-300/40 p-2">
+              <div className="rounded-3xl border border-slate-800 bg-slate-800/70 p-8 backdrop-blur-md text-center">
+                <div className="mx-auto flex h-24 w-24 sm:h-28 sm:w-28 flex-col items-center justify-center rounded-full bg-slate-700 text-white shadow-2xl border-2 border-slate-600 p-2">
                   <span className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-none">
                     100%
                   </span>
-                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#FDFBD4] mt-1">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 mt-1">
                     Certified
                   </span>
                 </div>
                 <h3 className="mt-6 text-2xl font-bold text-white">
                   Compliance Guarantee
                 </h3>
-                <p className="mt-3 text-sm text-[#E8D3BC] leading-relaxed">
+                <p className="mt-3 text-sm text-slate-300 leading-relaxed">
                   All instruments tested with traceable reference standards before dispatch to your medical facility.
                 </p>
                 <Link
                   href={makeLink("/contact")}
-                  className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#C05800] !text-white px-8 py-3.5 text-sm font-bold shadow-xl shadow-[#C05800]/40 transition-all hover:bg-[#E06D00] hover:shadow-2xl hover:-translate-y-0.5 border border-amber-400/30"
+                  className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-white !text-slate-900 px-8 py-3.5 text-sm font-bold shadow-xl transition-all hover:bg-slate-100 hover:-translate-y-0.5"
                 >
-                  <span className="!text-white font-bold">Request Inspection Certificate</span>
-                  <ArrowRight size={16} className="!text-white" />
+                  <span className="!text-slate-900 font-bold">Request Inspection Certificate</span>
+                  <ArrowRight size={16} className="!text-slate-900" />
                 </Link>
               </div>
             </div>
@@ -459,12 +458,12 @@ export default function Home({ city }) {
       </section>
 
       {/* ================= TESTIMONIALS ================= */}
-      <section className="section-padding bg-gradient-to-b from-white via-[#FFF9EF] to-[#FDFBD4]">
+      <section className="section-padding bg-white">
         <div className="container-custom">
           <SectionTitle
             badge="What Our Partners Say"
             title="Chosen by Diagnostic Teams"
-            description="Read how healthcare professionals rely onRaj Biosisfor accurate diagnostics and uninterrupted equipment uptime."
+            description="Read how healthcare professionals rely on Raj Biosis for accurate diagnostics and uninterrupted equipment uptime."
             center
           />
 
@@ -472,26 +471,26 @@ export default function Home({ city }) {
             {testimonials.map((t, idx) => (
               <div
                 key={idx}
-                className="flex flex-col justify-between rounded-3xl border border-[#E8D3BC] bg-white p-8 shadow-md transition-all hover:-translate-y-1 hover:shadow-xl"
+                className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:border-slate-400 hover:shadow-xl"
               >
                 <div>
-                  <div className="flex gap-1 text-[#C05800] mb-4">
+                  <div className="flex gap-1 text-amber-500 mb-4">
                     {Array.from({ length: t.rating }).map((_, i) => (
                       <span key={i}>★</span>
                     ))}
                   </div>
-                  <p className="text-sm sm:text-base leading-relaxed text-[#5B4634] italic">
-                    "{t.quote}"
+                  <p className="text-sm sm:text-base leading-relaxed text-slate-600 italic">
+                    &ldquo;{t.quote}&rdquo;
                   </p>
                 </div>
 
-                <div className="mt-8 border-t border-[#E8D3BC]/60 pt-4 flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F3E4D2] text-[#C05800] font-bold text-lg">
+                <div className="mt-8 border-t border-slate-100 pt-4 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white font-bold text-lg">
                     {t.author.charAt(4) || "D"}
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-[#38240D]">{t.author}</h4>
-                    <p className="text-xs text-[#5B4634]">{t.role} — <span className="text-[#C05800] font-medium">{t.institution}</span></p>
+                    <h4 className="text-base font-bold text-slate-900">{t.author}</h4>
+                    <p className="text-xs text-slate-500">{t.role} — <span className="text-slate-800 font-medium">{t.institution}</span></p>
                   </div>
                 </div>
               </div>
@@ -501,7 +500,7 @@ export default function Home({ city }) {
       </section>
 
       {/* ================= QUICK INQUIRY FORM SECTION ================= */}
-      <section className="section-padding bg-gradient-to-br from-[#FDFBD4] via-white to-[#F3E4D2] border-t border-[#E8D3BC]">
+      <section className="section-padding bg-slate-50 border-t border-slate-200">
         <div className="container-custom">
           <div className="grid lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-5">
@@ -515,14 +514,14 @@ export default function Home({ city }) {
                 {helplinePhone && (
                   <a
                     href={`tel:${String(helplinePhone).replace(/\s+/g, "")}`}
-                    className="flex items-center gap-4 rounded-2xl border border-[#E8D3BC] bg-white p-4 shadow-sm hover:border-[#C05800]/40 transition-colors"
+                    className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs hover:border-slate-400 transition-colors"
                   >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F3E4D2] text-[#C05800] shrink-0">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-900 shrink-0">
                       <PhoneCall size={22} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-[#5B4634]">Direct Helpline</p>
-                      <p className="text-base font-bold text-[#38240D]">{helplinePhone}</p>
+                      <p className="text-xs font-bold text-slate-500">Direct Helpline</p>
+                      <p className="text-base font-bold text-slate-900">{helplinePhone}</p>
                     </div>
                   </a>
                 )}
@@ -530,14 +529,14 @@ export default function Home({ city }) {
                 {supportEmail && (
                   <a
                     href={`mailto:${supportEmail}`}
-                    className="flex items-center gap-4 rounded-2xl border border-[#E8D3BC] bg-white p-4 shadow-sm hover:border-[#C05800]/40 transition-colors"
+                    className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs hover:border-slate-400 transition-colors"
                   >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F3E4D2] text-[#C05800] shrink-0">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-900 shrink-0">
                       <Mail size={22} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-[#5B4634]">Official Email</p>
-                      <p className="text-base font-bold text-[#38240D] break-all">{supportEmail}</p>
+                      <p className="text-xs font-bold text-slate-500">Official Email</p>
+                      <p className="text-base font-bold text-slate-900 break-all">{supportEmail}</p>
                     </div>
                   </a>
                 )}

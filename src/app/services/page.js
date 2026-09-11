@@ -21,8 +21,8 @@ import {
   PhoneCall,
   FileCheck,
   Cpu,
+  ArrowRight,
 } from "lucide-react";
-import { fallbackServices } from "@/data/servicesData";
 
 const workflowSteps = [
   {
@@ -52,13 +52,15 @@ const workflowSteps = [
 ];
 
 export default function ServicesPage() {
-  const [services, setServices] = useState(fallbackServices);
+  // Services are Firebase/Admin driven only
+  const [services, setServices] = useState([]);
   const [contactInfo, setContactInfo] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const pathname = usePathname();
   const pathParts = pathname.split("/").filter(Boolean);
   const staticRoutes = ["about", "services", "products", "contact", "items"];
+
   const district =
     pathParts.length > 0 && !staticRoutes.includes(pathParts[0])
       ? pathParts[0]
@@ -83,24 +85,64 @@ export default function ServicesPage() {
     const fetchServicesAndContact = async () => {
       try {
         const [servicesSnap, contactSnap] = await Promise.all([
-          getDoc(doc(db, "websites", "clinidixcom", "pages", "services")),
-          getDoc(doc(db, "websites", "clinidixcom", "pages", "contact")),
+          getDoc(
+            doc(db, "websites", "biohaloscom", "pages", "services")
+          ),
+          getDoc(
+            doc(db, "websites", "biohaloscom", "pages", "contact")
+          ),
         ]);
 
-        if (servicesSnap.exists() && servicesSnap.data().services?.length > 0) {
-          const dbServices = servicesSnap.data().services.map((s, idx) => ({
-            ...fallbackServices[idx % fallbackServices.length],
-            title: s.title || fallbackServices[idx % fallbackServices.length].title,
-            desc: s.desc || fallbackServices[idx % fallbackServices.length].desc,
-          }));
-          setServices(dbServices);
+        // ============================================================
+        // DYNAMIC SERVICES FROM ADMIN / FIREBASE
+        // No fallback service data
+        // ============================================================
+        if (servicesSnap.exists()) {
+          const rawServices = servicesSnap.data()?.services;
+
+          if (Array.isArray(rawServices)) {
+            const dbServices = rawServices
+              .map((service, index) => ({
+                id: service?.id || `service-${index}`,
+                title:
+                  typeof service?.title === "string"
+                    ? service.title.trim()
+                    : "",
+                desc:
+                  typeof service?.desc === "string"
+                    ? service.desc.trim()
+                    : "",
+              }))
+              // Admin saves services only when both title and desc exist
+              .filter((service) => service.title && service.desc);
+
+            setServices(dbServices);
+          } else {
+            setServices([]);
+          }
+        } else {
+          setServices([]);
         }
 
+        // ============================================================
+        // DYNAMIC CONTACT INFORMATION FROM ADMIN / FIREBASE
+        // ============================================================
         if (contactSnap.exists()) {
-          setContactInfo(contactSnap.data().contactInfo || []);
+          setContactInfo(
+            contactSnap.data()?.contactInfo || []
+          );
+        } else {
+          setContactInfo([]);
         }
       } catch (error) {
-        console.error("Error loading services/contact data:", error);
+        console.error(
+          "Error loading dynamic services/contact data:",
+          error
+        );
+
+        // Never use static fallback data
+        setServices([]);
+        setContactInfo([]);
       } finally {
         setLoading(false);
       }
@@ -113,6 +155,7 @@ export default function ServicesPage() {
   const emergencyPhone = (() => {
     const item = contactInfo.find((c) => {
       const l = (c?.label || "").toLowerCase();
+
       return (
         l.includes("phone") ||
         l.includes("mobile") ||
@@ -122,22 +165,34 @@ export default function ServicesPage() {
         l.includes("contact")
       );
     });
+
     if (!item) return "";
-    if (Array.isArray(item.value)) return item.value[0] || "";
-    return typeof item.value === "string" ? item.value.trim() : "";
+
+    if (Array.isArray(item.value)) {
+      return item.value[0] || "";
+    }
+
+    return typeof item.value === "string"
+      ? item.value.trim()
+      : "";
   })();
 
   return (
-    <div className="bg-[#FFF9EF]/40 text-[#38240D]">
-      {/* Banner */}
+    <div className="bg-slate-50 text-slate-900">
+      {/* ============================================================
+          STATIC BANNER
+          ============================================================ */}
       <PageBanner
         badge="Technical Services"
         title="Biomedical Support From Setup to Service"
         subtitle="NABL-certified calibration, 2-hour emergency repair SLAs, cold-chain reagent distribution, and turnkey pathology setup."
       />
 
-      {/* Services Grid Section */}
-      <section className="section-padding bg-gradient-to-b from-white via-[#FFF9EF] to-[#FDFBD4]">
+      {/* ============================================================
+          SERVICES GRID
+          SERVICES ARE 100% DYNAMIC FROM ADMIN
+          ============================================================ */}
+      <section className="section-padding bg-slate-50">
         <div className="container-custom">
           <SectionTitle
             badge="Full Service Catalog"
@@ -147,23 +202,71 @@ export default function ServicesPage() {
           />
 
           <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {services.map((service, index) => (
-              <ServiceCard
-                key={service.id || index}
-                icon={icons[index % icons.length]}
-                title={service.title}
-                description={service.desc}
-                badge={service.badge}
-                turnaround={service.turnaround}
-                highlights={service.highlights}
-              />
-            ))}
+            {/* Loading State */}
+            {loading ? (
+              Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm animate-pulse"
+                >
+                  <div className="h-14 w-14 rounded-2xl bg-slate-200" />
+
+                  <div className="mt-6 h-6 w-3/4 rounded bg-slate-200" />
+
+                  <div className="mt-4 space-y-2">
+                    <div className="h-4 w-full rounded bg-slate-200" />
+                    <div className="h-4 w-5/6 rounded bg-slate-200" />
+                    <div className="h-4 w-2/3 rounded bg-slate-200" />
+                  </div>
+                </div>
+              ))
+            ) : services.length > 0 ? (
+              // Dynamic Admin Services
+              services.map((service, index) => (
+                <ServiceCard
+                  key={service.id || index}
+                  icon={icons[index % icons.length]}
+                  title={service.title}
+                  description={service.desc}
+                  makeLink={makeLink}
+                />
+              ))
+            ) : (
+              // No Dynamic Services
+              <div className="md:col-span-2 lg:col-span-3">
+                <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+                    <Wrench size={30} />
+                  </div>
+
+                  <h3 className="mt-6 text-2xl font-black text-slate-900">
+                    No Services Available
+                  </h3>
+
+                  <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-600">
+                    Our service catalog is currently being updated.
+                    Please contact our team for current service
+                    availability and support.
+                  </p>
+
+                  <Link
+                    href={makeLink("/contact")}
+                    className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-bold !text-white transition-all hover:bg-slate-800 hover:-translate-y-0.5"
+                  >
+                    <span>Contact Our Team</span>
+                    <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Workflow Process Section */}
-      <section className="section-padding bg-white border-y border-[#E8D3BC]/60">
+      {/* ============================================================
+          STATIC WORKFLOW PROCESS
+          ============================================================ */}
+      <section className="section-padding bg-white border-y border-slate-200">
         <div className="container-custom">
           <SectionTitle
             badge="Execution Framework"
@@ -175,32 +278,36 @@ export default function ServicesPage() {
           <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
             {workflowSteps.map((step, index) => {
               const Icon = step.icon;
+
               return (
                 <div
                   key={index}
-                  className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-[#E8D3BC] bg-[#FFF9EF] p-8 shadow-sm transition-all duration-300 hover:-translate-y-2 hover:border-[#C05800] hover:shadow-xl"
+                  className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-xs transition-all duration-300 hover:-translate-y-1.5 hover:border-slate-300 hover:shadow-xl"
                 >
                   <div>
                     <div className="flex items-center justify-between">
-                      <span className="text-4xl font-black text-[#C05800]/40 group-hover:text-[#C05800] transition-colors">
+                      <span className="text-4xl font-black text-slate-400 group-hover:text-slate-900 transition-colors">
                         {step.step}
                       </span>
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#C05800] shadow-sm">
+
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-900 shadow-xs">
                         <Icon size={24} />
                       </div>
                     </div>
 
-                    <h3 className="mt-6 text-xl font-bold text-[#38240D] group-hover:text-[#C05800] transition-colors">
+                    <h3 className="mt-6 text-xl font-bold text-slate-900 group-hover:text-slate-700 transition-colors">
                       {step.title}
                     </h3>
 
-                    <p className="mt-3 text-sm leading-relaxed text-[#5B4634]">
+                    <p className="mt-3 text-sm leading-relaxed text-slate-600">
                       {step.desc}
                     </p>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-[#E8D3BC]/40">
-                    <span className="text-xs font-bold text-[#713600]">Phase {index + 1} Milestone</span>
+                  <div className="mt-6 pt-4 border-t border-slate-200">
+                    <span className="text-xs font-bold text-slate-700">
+                      Phase {index + 1} Milestone
+                    </span>
                   </div>
                 </div>
               );
@@ -209,57 +316,87 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      {/* Breakdown SLA Box */}
-      <section className="section-padding bg-gradient-to-b from-[#FDFBD4] via-white to-[#FFF9EF]">
+      {/* ============================================================
+          STATIC SLA SECTION
+          ONLY PHONE NUMBER IS DYNAMIC FROM ADMIN
+          ============================================================ */}
+      <section className="section-padding bg-slate-50">
         <div className="container-custom">
-          <div className="rounded-3xl border border-[#E8D3BC] bg-gradient-to-r from-[#38240D] to-[#5B4634] p-8 sm:p-12 text-white shadow-xl">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 sm:p-12 text-white shadow-xl">
             <div className="grid lg:grid-cols-12 gap-8 items-center">
               <div className="lg:col-span-8">
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#C05800] px-4 py-1.5 text-xs font-bold text-white uppercase tracking-wider">
-                  <Zap size={14} /> Emergency Breakdown Helpline
+                <span className="inline-flex items-center gap-2 rounded-full bg-slate-800 border border-slate-700 px-4 py-1.5 text-xs font-bold text-slate-200 uppercase tracking-wider">
+                  <Zap size={14} className="text-emerald-400" />
+                  Emergency Breakdown Helpline
                 </span>
 
                 <h3 className="mt-4 text-3xl font-black text-white sm:text-4xl">
                   Facing an Equipment Emergency in ICU or Lab?
                 </h3>
 
-                <p className="mt-3 text-base text-[#E8D3BC] leading-relaxed">
-                  Our certified field engineers are equipped with OEM diagnostic kits and genuine spare parts for instant on-site restoration.
+                <p className="mt-3 text-base text-slate-300 leading-relaxed">
+                  Our certified field engineers are equipped with OEM
+                  diagnostic kits and genuine spare parts for instant
+                  on-site restoration.
                 </p>
 
                 <div className="mt-6 flex flex-wrap items-center gap-6 text-sm font-semibold text-white">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 size={18} className="text-[#C05800]" />
+                    <CheckCircle2
+                      size={18}
+                      className="text-emerald-400"
+                    />
                     <span>2-Hour On-Site SLA</span>
                   </div>
+
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 size={18} className="text-[#C05800]" />
+                    <CheckCircle2
+                      size={18}
+                      className="text-emerald-400"
+                    />
                     <span>Loaner Analyzer Option</span>
                   </div>
+
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 size={18} className="text-[#C05800]" />
+                    <CheckCircle2
+                      size={18}
+                      className="text-emerald-400"
+                    />
                     <span>NABL Re-calibration Included</span>
                   </div>
                 </div>
               </div>
 
-              <div className="lg:col-span-4 flex flex-col items-center justify-center text-center border-t lg:border-t-0 lg:border-l border-[#E8D3BC]/20 pt-6 lg:pt-0 lg:pl-8">
-                <p className="text-xs font-bold uppercase tracking-wider text-[#E8D3BC]">Emergency Dispatch</p>
+              <div className="lg:col-span-4 flex flex-col items-center justify-center text-center border-t lg:border-t-0 lg:border-l border-slate-800 pt-6 lg:pt-0 lg:pl-8">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Emergency Dispatch
+                </p>
+
+                {/* Dynamic phone from Admin */}
                 {emergencyPhone ? (
                   <a
-                    href={`tel:${emergencyPhone.replace(/\s+/g, "")}`}
-                    className="mt-2 text-2xl font-black text-white hover:text-[#FBBF24] transition-colors inline-block"
+                    href={`tel:${emergencyPhone.replace(
+                      /\s+/g,
+                      ""
+                    )}`}
+                    className="mt-2 text-2xl font-black text-white hover:text-slate-300 transition-colors inline-block"
                   >
                     {emergencyPhone}
                   </a>
                 ) : (
-                  <p className="mt-2 text-sm text-[#E8D3BC]">24/7 Field Dispatch Active</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    24/7 Field Dispatch Active
+                  </p>
                 )}
+
+                {/* Static button + static/district-aware route */}
                 <Link
                   href={makeLink("/contact")}
-                  className="mt-5 w-full rounded-2xl bg-[#C05800] py-3.5 text-center text-sm font-bold text-white shadow-lg transition-all hover:bg-[#713600]"
+                  className="mt-5 w-full rounded-2xl bg-white py-3.5 text-center text-sm font-bold !text-slate-900 shadow-lg transition-all hover:bg-slate-100"
                 >
-                  Book Priority Repair
+                  <span className="!text-slate-900 font-bold">
+                    Book Priority Repair
+                  </span>
                 </Link>
               </div>
             </div>

@@ -1,6 +1,6 @@
 {
   "apphosting": {
-    "backendId": "clinidixcom",
+    "backendId": "biohaloscom",
     "rootDir": "/",
     "ignore": [
       "node_modules",
