@@ -49,7 +49,7 @@ export default function ProductsPage() {
 
       });
 
-    }, [search]);
+    }, [products, search]);
 
   const groupedProducts =
     useMemo(() => {

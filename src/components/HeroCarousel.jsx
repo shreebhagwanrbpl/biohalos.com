@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -16,11 +17,11 @@ import {
   Film,
 } from "lucide-react";
 
-// Default high-quality fallback slides if database has no media configured yet
+// Default high-quality fallback slides with precision biomedical equipment
 const FALLBACK_SLIDES = [
   {
     type: "image",
-    url: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1900&q=80",
+    url: "/hero-medical-1.jpg",
     title: "Precision Medical Equipment & Diagnostic Solutions",
     subtitle:
       "Equipping hospitals, pathology centers, and clinical laboratories with top-tier automated analyzers, NABL-traceable calibration, and 24/7 rapid technical engineering support across India.",
@@ -28,7 +29,7 @@ const FALLBACK_SLIDES = [
   },
   {
     type: "image",
-    url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1900&q=80",
+    url: "/hero-medical-2.jpg",
     title: "Automated Clinical Chemistry & Pathology Analyzers",
     subtitle:
       "High-throughput diagnostic instruments delivering rapid test results with uncompromised quality control and ISO 13485 certified accuracy standards.",
@@ -36,7 +37,7 @@ const FALLBACK_SLIDES = [
   },
   {
     type: "image",
-    url: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1900&q=80",
+    url: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1900&q=80",
     title: "24/7 Biomedical Engineering & AMC Support",
     subtitle:
       "Guaranteed 2-hour emergency repair SLA for critical ICU, OT, and pathology laboratory equipment with genuine OEM parts.",
@@ -55,7 +56,6 @@ export default function HeroCarousel({
   const [touchEnd, setTouchEnd] = useState(null);
   const videoRefs = useRef({});
 
-  // Parse media items from Firestore home data
   const parseMediaList = (data) => {
     if (!data) return [];
     const list = [];
@@ -145,10 +145,9 @@ export default function HeroCarousel({
 
   const dbSlides = parseMediaList(homeData);
 
-  // Images remain dynamic with static fallback
+  // Images remain dynamic with biomedical equipment fallback
   const slides = dbSlides.length > 0 ? dbSlides : FALLBACK_SLIDES;
 
-  // Dynamic texts from Firestore only — NO static fallback
   const heroTitle = homeData?.title?.trim() || "";
   const heroDescription = homeData?.description?.trim() || "";
   const btn1Text = homeData?.button1Text?.trim() || "";
@@ -169,26 +168,20 @@ export default function HeroCarousel({
     return () => clearInterval(timer);
   }, [isPlaying, slides.length, currentSlide]);
 
-  // Adjust active slide index safely
-  useEffect(() => {
-    if (currentSlide >= slides.length && slides.length > 0) {
-      setCurrentSlide(slides.length - 1);
-    }
-  }, [slides.length, currentSlide]);
-
   // Play video on current slide
-  useEffect(() => {
-    const currentMedia = slides[currentSlide];
+  const safeSlideIndex = currentSlide < slides.length ? currentSlide : 0;
+  const activeMedia = slides[safeSlideIndex] || slides[0];
 
-    if (currentMedia?.type === "video") {
-      const vid = videoRefs.current[currentSlide];
+  useEffect(() => {
+    if (activeMedia?.type === "video") {
+      const vid = videoRefs.current[safeSlideIndex];
 
       if (vid) {
         vid.currentTime = 0;
         vid.play().catch(() => { });
       }
     }
-  }, [currentSlide, slides]);
+  }, [safeSlideIndex, activeMedia]);
 
   const handlePrev = () => {
     setCurrentSlide(
@@ -226,13 +219,11 @@ export default function HeroCarousel({
     }
   };
 
-  const activeMedia = slides[currentSlide] || slides[0];
-
   return (
     <section className="relative overflow-hidden bg-slate-950 text-white">
-      {/* Background Media Viewport - Editorial Format */}
+      {/* Background Media Viewport - Compact Editorial Format */}
       <div
-        className="relative w-full min-h-[460px] sm:min-h-[520px] md:min-h-[580px] lg:min-h-[620px] overflow-hidden flex flex-col justify-between"
+        className="relative w-full min-h-[380px] sm:min-h-[420px] md:min-h-[460px] lg:min-h-[490px] overflow-hidden flex flex-col justify-between"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -240,7 +231,7 @@ export default function HeroCarousel({
         {/* Background Image / Video Layer */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentSlide}
+            key={safeSlideIndex}
             initial={{ opacity: 0, scale: 1.04 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
@@ -250,7 +241,7 @@ export default function HeroCarousel({
             {activeMedia?.type === "video" ? (
               <video
                 ref={(el) =>
-                  (videoRefs.current[currentSlide] = el)
+                  (videoRefs.current[safeSlideIndex] = el)
                 }
                 src={activeMedia.url}
                 className="w-full h-full object-cover object-center"
@@ -261,15 +252,17 @@ export default function HeroCarousel({
                 preload="auto"
               />
             ) : (
-              <img
-                src={activeMedia?.url}
-                alt={`Hero Slide ${currentSlide + 1}`}
-                className="w-full h-full object-cover object-center brightness-[0.88] contrast-[1.08]"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = FALLBACK_SLIDES[0].url;
-                }}
-              />
+              <div className="relative w-full h-full">
+                <Image
+                  src={activeMedia?.url || FALLBACK_SLIDES[0].url}
+                  alt={`Hero Slide ${safeSlideIndex + 1}`}
+                  fill
+                  priority={safeSlideIndex === 0}
+                  quality={85}
+                  sizes="100vw"
+                  className="object-cover object-center brightness-[0.85] contrast-[1.08]"
+                />
+              </div>
             )}
           </motion.div>
         </AnimatePresence>
@@ -279,20 +272,20 @@ export default function HeroCarousel({
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/40 z-10" />
 
         {/* Top Editorial Scrim Bar */}
-        <div className="container-custom relative z-20 pt-8 sm:pt-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="container-custom relative z-20 pt-4 sm:pt-6 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
 
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
               {locationTitle
                 ? `Biomedical Supply Edition // ${locationTitle}`
                 : "Raj Biosis // Biomedical Engineering"}
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 rounded-full border border-white/20 bg-slate-900/80 px-3.5 py-1 text-xs font-semibold backdrop-blur-md text-white">
+          <div className="hidden sm:flex items-center gap-2 rounded-full border border-white/20 bg-slate-900/80 px-3 py-0.5 text-[11px] font-semibold backdrop-blur-md text-white">
             <span className="font-mono text-emerald-400">
-              0{currentSlide + 1}
+              0{safeSlideIndex + 1}
             </span>
 
             <span className="text-slate-400">/</span>
@@ -304,16 +297,16 @@ export default function HeroCarousel({
         </div>
 
         {/* Center Editorial Typography Content */}
-        <div className="container-custom relative z-20 py-8 sm:py-12 my-auto">
+        <div className="container-custom relative z-20 py-4 sm:py-6 my-auto">
           <div className="max-w-2xl lg:max-w-3xl">
             {/* Editorial Kicker Badge */}
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/80 px-3.5 py-1.5 text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-100 shadow-lg backdrop-blur-md"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/80 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-100 shadow-md backdrop-blur-md"
             >
-              <Sparkles size={13} className="text-emerald-400" />
+              <Sparkles size={12} className="text-emerald-400" />
 
               <span>
                 {activeMedia?.tag ||
@@ -324,11 +317,11 @@ export default function HeroCarousel({
             {/* Editorial Title */}
             {heroTitle && (
               <motion.h1
-                key={`title-${currentSlide}-${heroTitle}`}
-                initial={{ opacity: 0, y: 20 }}
+                key={`title-${safeSlideIndex}-${heroTitle}`}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                className="mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.08] drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]"
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="mt-3 text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white leading-[1.12] drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]"
               >
                 {heroTitle}
               </motion.h1>
@@ -337,11 +330,11 @@ export default function HeroCarousel({
             {/* Editorial Subtitle */}
             {heroDescription && (
               <motion.p
-                key={`desc-${currentSlide}-${heroDescription}`}
-                initial={{ opacity: 0, y: 20 }}
+                key={`desc-${safeSlideIndex}-${heroDescription}`}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="mt-4 text-sm sm:text-base md:text-lg leading-relaxed text-slate-200 max-w-2xl font-normal drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="mt-3 text-xs sm:text-sm md:text-base leading-relaxed text-slate-200 max-w-2xl font-normal drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
               >
                 {heroDescription}
               </motion.p>
@@ -349,23 +342,23 @@ export default function HeroCarousel({
 
             {/* High-Contrast Action Buttons */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="mt-6 sm:mt-8 flex flex-wrap items-center gap-3 sm:gap-4"
+              transition={{ duration: 0.5, delay: 0.25 }}
+              className="mt-5 sm:mt-6 flex flex-wrap items-center gap-3"
             >
               {/* Button 1 — Text Dynamic, Link Static */}
               {btn1Text && (
                 <Link
                   href={btn1Href}
-                  className="flex items-center justify-center gap-2.5 rounded-2xl bg-white !text-slate-950 px-7 py-3.5 text-sm font-bold shadow-2xl transition-all duration-300 hover:bg-slate-100 hover:shadow-2xl hover:-translate-y-0.5"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-white !text-slate-950 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold shadow-xl transition-all duration-300 hover:bg-slate-100 hover:shadow-2xl hover:-translate-y-0.5"
                 >
                   <span className="!text-slate-950 font-bold">
                     {btn1Text}
                   </span>
 
                   <ArrowRight
-                    size={16}
+                    size={15}
                     className="!text-slate-950 stroke-[2.5]"
                   />
                 </Link>
@@ -375,10 +368,10 @@ export default function HeroCarousel({
               {btn2Text && (
                 <Link
                   href={btn2Href}
-                  className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/40 bg-slate-900/80 !text-white px-7 py-3.5 text-sm font-bold backdrop-blur-md shadow-lg transition-all duration-300 hover:bg-white hover:!text-slate-950 hover:border-white hover:-translate-y-0.5"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-white/40 bg-slate-900/80 !text-white px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold backdrop-blur-md shadow-md transition-all duration-300 hover:bg-white hover:!text-slate-950 hover:border-white hover:-translate-y-0.5"
                 >
                   <PhoneCall
-                    size={16}
+                    size={15}
                     className="text-emerald-400"
                   />
 
@@ -392,8 +385,8 @@ export default function HeroCarousel({
         </div>
 
         {/* Bottom Editorial Chapter Bar */}
-        <div className="container-custom relative z-20 pb-6 sm:pb-8 pt-4 border-t border-white/10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="container-custom relative z-20 pb-4 sm:pb-5 pt-3 border-t border-white/10">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             {/* Numbered Editorial Slide Tabs */}
             <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
               {slides.map((s, idx) => (

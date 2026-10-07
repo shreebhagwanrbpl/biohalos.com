@@ -1,20 +1,35 @@
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import { fallbackProducts, makeSlug } from "@/data/productsData";
-import { fetchFullCatalog } from "@/lib/data-fetcher";
+import { makeSlug } from "@/lib/catalog-utils";
 
-/**
- * Standardizes raw Firestore product/item document object to standard shape
- */
-export function normalizeProduct(item, defaultCategory = "Diagnostic Equipment") {
+function normalizeProduct(item, defaultCategory = "") {
   if (!item || typeof item !== "object") return null;
 
-  const title = (item.title || item.name || item.productName || item.itemName || "").trim();
+  const title = String(
+    item.title ||
+    item.name ||
+    item.productName ||
+    item.itemName ||
+    ""
+  ).trim();
+
   if (!title) return null;
 
-  const rawSlug = item.slug || item.productSlug || item.itemSlug || makeSlug(title);
-  const category = item.category || item.categoryName || defaultCategory || "Diagnostic Equipment";
-  const subCategory = item.subCategory || item["sub category"] || item.subCategoryName || "";
+  const rawSlug =
+    item.slug ||
+    item.productSlug ||
+    item.itemSlug ||
+    makeSlug(title);
+
+  const category =
+    item.category ||
+    item.categoryName ||
+    defaultCategory ||
+    "";
+
+  const subCategory =
+    item.subCategory ||
+    item["sub category"] ||
+    item.subCategoryName ||
+    "";
 
   const description =
     item.desc ||
@@ -30,19 +45,28 @@ export function normalizeProduct(item, defaultCategory = "Diagnostic Equipment")
     (Array.isArray(item.images) && item.images[0]) ||
     "";
 
-  let images = Array.isArray(item.images) && item.images.length > 0 ? item.images : image ? [image] : [];
+  const images =
+    Array.isArray(item.images) && item.images.length
+      ? item.images
+      : image
+        ? [image]
+        : [];
 
-  let features = Array.isArray(item.features)
-    ? item.features.filter(Boolean)
-    : typeof item.features === "string"
-      ? item.features.split(",").map((f) => f.trim()).filter(Boolean)
-      : [];
+  const features =
+    Array.isArray(item.features)
+      ? item.features.filter(Boolean)
+      : typeof item.features === "string"
+        ? item.features.split(",").map((x) => x.trim()).filter(Boolean)
+        : [];
 
   return {
     ...item,
     id: item.uid || item.id || item.categoryProductId || rawSlug,
+    uid: item.uid || item.id || rawSlug,
+    productId: item.productId || item.uid || item.id || rawSlug,
     categoryProductId: item.categoryProductId || "",
     title,
+    name: title,
     slug: rawSlug,
     category,
     subCategory,
@@ -62,7 +86,7 @@ export function normalizeProduct(item, defaultCategory = "Diagnostic Equipment")
     features,
     specs: item.specs && typeof item.specs === "object" ? item.specs : null,
     badge: item.badge || item.tag || "",
-    status: item.status || item.availability || "In Stock",
+    status: item.status || item.availability || "",
     image,
     images,
     video: item.video || "",
@@ -71,52 +95,54 @@ export function normalizeProduct(item, defaultCategory = "Diagnostic Equipment")
   };
 }
 
-/**
- * Fetches dynamic products from all possible Firestore locations used by admin panel
- */
+export { normalizeProduct };
+
+let productsCache = null;
+let productsCacheTime = 0;
+let inFlightCatalogPromise = null;
+const CATALOG_TTL = 60 * 1000; // 60s memory cache
+
 export async function fetchAllDynamicProducts() {
-  const productsMap = new Map();
+  const now = Date.now();
+  if (productsCache && (now - productsCacheTime < CATALOG_TTL)) {
+    return productsCache;
+  }
 
-  const addItems = (itemsArray, defaultCat) => {
-    if (!Array.isArray(itemsArray)) return;
-    itemsArray.forEach((raw) => {
-      const p = normalizeProduct(raw, defaultCat);
-      if (p && p.slug && !productsMap.has(p.slug)) {
-        productsMap.set(p.slug, p);
+  if (inFlightCatalogPromise) {
+    return inFlightCatalogPromise;
+  }
+
+  inFlightCatalogPromise = (async () => {
+    try {
+      const response = await fetch("/api/catalog", {
+        cache: "default",
+      });
+      const body = await response.json();
+
+      if (!response.ok || body?.ok === false) {
+        throw new Error(body?.error || `Catalog API ${response.status}`);
       }
-    });
-  };
 
-  try {
-    // 1. Fetch full catalog via data-fetcher (subcategories, category products, legacy products)
-    const fullCatalog = await fetchFullCatalog();
-    if (Array.isArray(fullCatalog) && fullCatalog.length > 0) {
-      addItems(fullCatalog);
+      const products =
+        body?.products ??
+        body?.data?.products ??
+        body?.data ??
+        body;
+
+      const normalized = Array.isArray(products)
+        ? products.map((item) => normalizeProduct(item)).filter(Boolean)
+        : [];
+
+      productsCache = normalized;
+      productsCacheTime = Date.now();
+      return normalized;
+    } catch (error) {
+      console.error("[fetchProducts] Admin catalog error:", error);
+      return productsCache || [];
+    } finally {
+      inFlightCatalogPromise = null;
     }
+  })();
 
-    // 2. Fetch extra fallback collections if any
-    const extraSnapshots = await Promise.allSettled([
-      getDocs(collection(db, "websites", "biohaloscom", "products")),
-      getDocs(collection(db, "websites", "biohaloscom", "items")),
-      getDocs(collection(db, "products")),
-      getDocs(collection(db, "items")),
-    ]);
-
-    extraSnapshots.forEach((res) => {
-      if (res.status === "fulfilled" && !res.value.empty) {
-        res.value.forEach((docSnap) => {
-          addItems([{ id: docSnap.id, ...docSnap.data() }]);
-        });
-      }
-    });
-  } catch (err) {
-    console.error("Error fetching dynamic products from Firestore:", err);
-  }
-
-  const fetchedList = Array.from(productsMap.values());
-  if (fetchedList.length > 0) {
-    return fetchedList;
-  }
-
-  return fallbackProducts;
+  return inFlightCatalogPromise;
 }

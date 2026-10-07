@@ -1,8 +1,7 @@
 "use client";
+import { db, doc, getDoc } from "@/lib/client-api";
 
 import { useEffect, useState, useMemo } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -49,32 +48,37 @@ export default function Footer() {
 
     const loadData = async () => {
       try {
-        // 1. Fetch Contact Info
-        try {
-          const snap = await getDoc(
+        const [snap, prods] = await Promise.all([
+          getDoc(
             doc(db, "websites", "biohaloscom", "pages", "contact")
-          );
-          if (isMounted && snap.exists()) {
-            setContactInfo(snap.data().contactInfo || []);
-          }
-        } catch (contactErr) {
-          console.error("Error loading footer contact:", contactErr);
+          ).catch((err) => {
+            console.error("Error loading footer contact:", err);
+            return null;
+          }),
+          fetchAllDynamicProducts().catch((err) => {
+            console.error("Error loading footer categories:", err);
+            return [];
+          }),
+        ]);
+
+        if (!isMounted) return;
+
+        if (snap && snap.exists()) {
+          setContactInfo(snap.data().contactInfo || []);
         }
 
-        // 2. Fetch Dynamic Product Categories
-        try {
-          const prods = await fetchAllDynamicProducts();
-          if (isMounted && Array.isArray(prods) && prods.length > 0) {
-            const catSet = new Set();
-            prods.forEach((p) => {
-              if (p.category && String(p.category).trim() && String(p.category).trim() !== "All Categories") {
-                catSet.add(String(p.category).trim());
-              }
-            });
-            setCategories(Array.from(catSet));
-          }
-        } catch (prodErr) {
-          console.error("Error loading footer categories:", prodErr);
+        if (Array.isArray(prods) && prods.length > 0) {
+          const catSet = new Set();
+          prods.forEach((p) => {
+            if (
+              p.category &&
+              String(p.category).trim() &&
+              String(p.category).trim() !== "All Categories"
+            ) {
+              catSet.add(String(p.category).trim());
+            }
+          });
+          setCategories(Array.from(catSet));
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -108,7 +112,6 @@ export default function Footer() {
     loadDistrict();
   }, [district]);
 
-  // Extract phone numbers flexibly from Firestore contactInfo
   const phoneItems = contactInfo.filter((item) => {
     const l = (item?.label || "").toLowerCase();
     return (
@@ -299,7 +302,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Contact Info - Purely Dynamic from Firestore */}
           <div>
             <h3 className="mb-5 text-base font-bold uppercase tracking-wider text-white">
               Contact Info

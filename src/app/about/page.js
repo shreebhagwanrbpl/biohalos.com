@@ -177,7 +177,7 @@ export default function AboutPage() {
               <h3 className="text-2xl font-bold text-slate-900">Our Vision</h3>
 
               <p className="mt-4 text-base leading-relaxed text-slate-600">
-                To be recognized as India's premier biomedical technology and calibration infrastructure company, setting the benchmark for precision, innovation, and customer support in diagnostic healthcare.
+                To be recognized as India&apos;s premier biomedical technology and calibration infrastructure company, setting the benchmark for precision, innovation, and customer support in diagnostic healthcare.
               </p>
 
               <ul className="mt-6 space-y-2.5 text-sm text-slate-600">

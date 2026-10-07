@@ -1,11 +1,10 @@
 "use client";
+import { db, doc, getDoc } from "@/lib/client-api";
 
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { motion } from "framer-motion";
 import {
   Microscope,
@@ -135,61 +134,75 @@ export default function Home({ city }) {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
-        // Fetch home page configuration
-        try {
-          const homeSnap = await getDoc(
-            doc(db, "websites", "biohaloscom", "pages", "home")
-          );
-          if (homeSnap.exists()) {
-            setHomeData(homeSnap.data());
-          }
-        } catch (homeErr) {
-          console.error("Error fetching home data:", homeErr);
+        const [homeSnap, contactSnap, serviceSnap, fetchedProducts] =
+          await Promise.all([
+            getDoc(
+              doc(db, "websites", "biohaloscom", "pages", "home")
+            ).catch((err) => {
+              console.error("Error fetching home data:", err);
+              return null;
+            }),
+            getDoc(
+              doc(db, "websites", "biohaloscom", "pages", "contact")
+            ).catch((err) => {
+              console.error("Error fetching contact data:", err);
+              return null;
+            }),
+            getDoc(
+              doc(db, "websites", "biohaloscom", "pages", "services")
+            ).catch((err) => {
+              console.error("Error fetching services:", err);
+              return null;
+            }),
+            fetchAllDynamicProducts().catch((err) => {
+              console.error("Error fetching products:", err);
+              return [];
+            }),
+          ]);
+
+        if (!isMounted) return;
+
+        if (homeSnap && homeSnap.exists()) {
+          setHomeData(homeSnap.data());
         }
 
-        // Fetch contact information
-        try {
-          const contactSnap = await getDoc(
-            doc(db, "websites", "biohaloscom", "pages", "contact")
-          );
-          if (contactSnap.exists()) {
-            setContactInfo(contactSnap.data().contactInfo || []);
-          }
-        } catch (contactErr) {
-          console.error("Error fetching contact data:", contactErr);
+        if (contactSnap && contactSnap.exists()) {
+          setContactInfo(contactSnap.data().contactInfo || []);
         }
 
-        // Fetch services from Firebase
-        try {
-          const serviceSnap = await getDoc(
-            doc(db, "websites", "biohaloscom", "pages", "services")
-          );
-          if (serviceSnap.exists() && serviceSnap.data().services?.length > 0) {
-            setServices(serviceSnap.data().services);
+        if (serviceSnap && serviceSnap.exists()) {
+          const sList = serviceSnap.data()?.services;
+          if (Array.isArray(sList) && sList.length > 0) {
+            setServices(sList);
           }
-        } catch (sErr) {
-          console.error("Error fetching services:", sErr);
         }
 
-        // Fetch products dynamically from Firestore - NO static fallback flash
-        const fetchedProducts = await fetchAllDynamicProducts();
         if (fetchedProducts && fetchedProducts.length > 0) {
           setProducts(fetchedProducts);
         }
       } catch (err) {
         console.error("Error loading homepage data:", err);
       } finally {
-        setLoadingProducts(false);
+        if (isMounted) setLoadingProducts(false);
       }
     };
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Show strictly 3 products on Home page
   const featuredProducts = products.slice(0, 3);
+
+  // Show strictly 3 services on Home page
+  const featuredServices = services.slice(0, 3);
 
   const serviceIcons = [
     <Microscope size={28} key={1} />,
@@ -358,19 +371,28 @@ export default function Home({ city }) {
         </div>
       </section>
 
-      {/* ================= SERVICES MATRIX ================= */}
-      {services.length > 0 && (
+      {/* ================= SERVICES MATRIX (STRICTLY 3 SERVICES ON HOME PAGE) ================= */}
+      {featuredServices.length > 0 && (
         <section className="section-padding bg-white">
           <div className="container-custom">
-            <SectionTitle
-              badge="Healthcare Solutions"
-              title="Support Built Around Your Workflow"
-              description="From NABL-certified calibration to 2-hour emergency repair response, our certified engineers support your clinical operations round the clock."
-              center
-            />
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+              <SectionTitle
+                badge="Healthcare Solutions"
+                title="Support Built Around Your Workflow"
+                description="From NABL-certified calibration to 2-hour emergency repair response, our certified engineers support your clinical operations round the clock."
+              />
 
-            <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {services.map((srv, idx) => (
+              <Link
+                href={makeLink("/services")}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-bold !text-white shadow-sm transition-all hover:bg-slate-800 hover:shadow-md shrink-0"
+              >
+                <span className="!text-white text-white font-bold">View All Services</span>
+                <ArrowRight size={16} className="!text-white text-white stroke-[2.5]" />
+              </Link>
+            </div>
+
+            <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {featuredServices.map((srv, idx) => (
                 <ServiceCard
                   key={srv.id || idx}
                   icon={serviceIcons[idx % serviceIcons.length]}

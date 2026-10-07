@@ -12,7 +12,6 @@ function ProductsContent({ city }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All Categories");
 
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -34,6 +33,17 @@ function ProductsContent({ city }) {
     return `/${district}${path.startsWith("/") ? path : `/${path}`}`;
   };
 
+  const [selectedCategoryOverride, setSelectedCategoryOverride] = useState(null);
+  const selectedCategory =
+    selectedCategoryOverride ??
+    (urlCategory && typeof urlCategory === "string" && urlCategory.trim()
+      ? decodeURIComponent(urlCategory.trim())
+      : "All Categories");
+
+  const setSelectedCategory = (cat) => {
+    setSelectedCategoryOverride(cat);
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -52,7 +62,6 @@ function ProductsContent({ city }) {
 
     loadInitialProducts();
 
-    // Subscribe to real-time catalog changes from Firestore
     const unsubscribe = subscribeToCatalog((updatedCatalog) => {
       if (isMounted && Array.isArray(updatedCatalog) && updatedCatalog.length > 0) {
         const normalized = updatedCatalog
@@ -80,14 +89,6 @@ function ProductsContent({ city }) {
     });
     return Array.from(setCat);
   }, [products]);
-
-  // Sync category from URL search params when changed
-  useEffect(() => {
-    if (urlCategory && typeof urlCategory === "string" && urlCategory.trim()) {
-      const decoded = decodeURIComponent(urlCategory.trim());
-      setSelectedCategory(decoded);
-    }
-  }, [urlCategory]);
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {

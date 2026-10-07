@@ -1,7 +1,9 @@
 "use client";
+import { db, doc, getDoc, addDoc, collection } from "@/lib/client-api";
 
 import { useEffect, useState, useRef, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import { usePathname } from "next/navigation";
 import { makeSlug } from "@/data/productsData";
@@ -16,13 +18,6 @@ import {
     FaLink,
 } from "react-icons/fa";
 
-import {
-    doc,
-    getDoc,
-    addDoc,
-    collection,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { Microscope, ShieldCheck, Download, Send, CheckCircle2, ChevronDown, Award, PhoneCall } from "lucide-react";
 
 const loadImageBase64 = async (src) => {
@@ -302,58 +297,67 @@ export default function ProductDetails({ slug }) {
         city.slice(1);
 
     useEffect(() => {
-        const loadProduct = async () => {
+        let isMounted = true;
+
+        const loadData = async () => {
             try {
-                const allProducts = await fetchAllDynamicProducts();
+                const [allProducts, contactSnap] = await Promise.all([
+                    fetchAllDynamicProducts().catch((err) => {
+                        console.error("Error loading products:", err);
+                        return [];
+                    }),
+                    getDoc(
+                        doc(db, "websites", "biohaloscom", "pages", "contact")
+                    ).catch((err) => {
+                        console.error("Error loading contact info:", err);
+                        return null;
+                    }),
+                ]);
 
-                let found = allProducts.find(
-                    (p) => p.slug === slug || makeSlug(p.title) === slug || p.id === slug
-                );
+                if (!isMounted) return;
 
-                if (found) {
-                    setProduct(found);
-                    const mainImg =
-                        (Array.isArray(found.images) && found.images[0]) ||
-                        found.image ||
-                        found.imgUrl ||
-                        found.imageUrl ||
-                        "/logo.png";
-                    setSelectedImage(mainImg);
-                    setSelectedMedia("image");
-                } else if (allProducts.length > 0) {
-                    // Fallback to closest match or first dynamic item
-                    setProduct(allProducts[0]);
-                    const mainImg =
-                        (Array.isArray(allProducts[0].images) && allProducts[0].images[0]) ||
-                        allProducts[0].image ||
-                        "/logo.png";
-                    setSelectedImage(mainImg);
+                if (contactSnap && contactSnap.exists()) {
+                    setContactInfo(contactSnap.data().contactInfo || []);
+                }
+
+                if (Array.isArray(allProducts) && allProducts.length > 0) {
+                    const found = allProducts.find(
+                        (p) => p.slug === slug || makeSlug(p.title) === slug || p.id === slug
+                    );
+
+                    if (found) {
+                        setProduct(found);
+                        const mainImg =
+                            (Array.isArray(found.images) && found.images[0]) ||
+                            found.image ||
+                            found.imgUrl ||
+                            found.imageUrl ||
+                            "/logo.png";
+                        setSelectedImage(mainImg);
+                        setSelectedMedia("image");
+                    } else {
+                        // Fallback to closest match or first dynamic item
+                        setProduct(allProducts[0]);
+                        const mainImg =
+                            (Array.isArray(allProducts[0].images) && allProducts[0].images[0]) ||
+                            allProducts[0].image ||
+                            "/logo.png";
+                        setSelectedImage(mainImg);
+                    }
                 }
             } catch (error) {
-                console.error("Error loading product:", error);
+                console.error("Error loading product details data:", error);
             } finally {
-                setLoading(false);
+                if (isMounted) setLoading(false);
             }
         };
 
-        loadProduct();
+        loadData();
+
+        return () => {
+            isMounted = false;
+        };
     }, [slug]);
-
-    useEffect(() => {
-        const loadContact = async () => {
-            try {
-                const snap = await getDoc(
-                    doc(db, "websites", "biohaloscom", "pages", "contact")
-                );
-                if (snap.exists()) {
-                    setContactInfo(snap.data().contactInfo || []);
-                }
-            } catch (err) {
-                console.error("Error loading contact info in details:", err);
-            }
-        };
-        loadContact();
-    }, []);
 
     const handleDownloadBrochure = async () => {
         if (!product) return;
@@ -680,12 +684,12 @@ export default function ProductDetails({ slug }) {
                         <p className="mt-2 text-sm text-slate-500">
                             The requested product might have been updated or moved. Please explore our equipment catalog or contact our engineering team.
                         </p>
-                        <a
-                            href="/items"
+                        <Link
+                            href={makeLink("/items")}
                             className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold !text-white shadow-sm"
                         >
                             Browse Equipment Catalog
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </section>
@@ -711,9 +715,9 @@ export default function ProductDetails({ slug }) {
             <div className="container-custom">
                 {/* Breadcrumbs */}
                 <div className="mb-6 flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-500">
-                    <a href="/" className="hover:text-slate-900 transition-colors">Home</a>
+                    <Link href={makeLink("/")} className="hover:text-slate-900 transition-colors">Home</Link>
                     <span>/</span>
-                    <a href="/items" className="hover:text-slate-900 transition-colors">Products</a>
+                    <Link href={makeLink("/items")} className="hover:text-slate-900 transition-colors">Products</Link>
                     <span>/</span>
                     <span className="text-slate-900 font-bold truncate max-w-xs sm:max-w-md">{product.title}</span>
                 </div>

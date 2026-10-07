@@ -1,8 +1,7 @@
 "use client";
+import { db, doc, getDoc } from "@/lib/client-api";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import PageBanner from "@/components/PageBanner";
@@ -52,7 +51,6 @@ const workflowSteps = [
 ];
 
 export default function ServicesPage() {
-  // Services are Firebase/Admin driven only
   const [services, setServices] = useState([]);
   const [contactInfo, setContactInfo] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +92,6 @@ export default function ServicesPage() {
         ]);
 
         // ============================================================
-        // DYNAMIC SERVICES FROM ADMIN / FIREBASE
         // No fallback service data
         // ============================================================
         if (servicesSnap.exists()) {
@@ -125,7 +122,6 @@ export default function ServicesPage() {
         }
 
         // ============================================================
-        // DYNAMIC CONTACT INFORMATION FROM ADMIN / FIREBASE
         // ============================================================
         if (contactSnap.exists()) {
           setContactInfo(
